@@ -12,6 +12,7 @@ from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
+from model.fuse.fuse import _Up_concat, _Phase_concat, _L2Norm
 import time
 import pdb
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
@@ -34,9 +35,18 @@ class _fasterRCNN(nn.Module):
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
         self.RCNN_roi_pool = _RoIPooling(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0 / 16.0)
         self.RCNN_roi_align = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0 / 16.0)
+        # for conv5
+        self.RCNN_roi_align5 = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0 / 16.0)
+        # for conv4
+        self.RCNN_roi_align4 = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0 / 8.0)
 
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.RCNN_roi_crop = _RoICrop()
+
+        self.Phase_concat = _Phase_concat(512, 256)
+        self.Up_concat = _Up_concat(512, 512, 256)
+        # self.L2Norm = _L2Norm(self.reduce_dim, 20)
+        self.Conv_pool = nn.Conv2d(1024, 512, kernel_size=1)
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -46,7 +56,18 @@ class _fasterRCNN(nn.Module):
         num_boxes = num_boxes.data
 
         # feed image data to base model to obtain base feature map
-        base_feat = self.RCNN_base(im_data)
+        # base_feat = self.RCNN_base(im_data)
+
+        conv4_2 = self.Conv4_2(im_data)
+        conv4_3 = self.Conv4_3(conv4_2)
+        conv5_2 = self.Conv5_2(conv4_3)
+        conv5_3 = self.Conv5_3(conv5_2)
+        #
+        conv4_f = self.Phase_concat(conv4_2, conv4_3)
+        conv5_f = self.Phase_concat(conv5_2, conv5_3)
+        conv_f = self.Up_concat(conv5_f, conv4_f)
+        #
+        base_feat = conv_f
 
         # feed base feature map tp RPN to obtain rois
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
@@ -80,9 +101,15 @@ class _fasterRCNN(nn.Module):
             if cfg.CROP_RESIZE_WITH_MAX_POOL:
                 pooled_feat = F.max_pool2d(pooled_feat, 2, 2)
         elif cfg.POOLING_MODE == 'align':
+            pooled_feat5 = self.RCNN_roi_align5(conv5_3, rois.view(-1, 5))
+            pooled_feat4 = self.RCNN_roi_align4(conv4_3, rois.view(-1, 5))
             pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5))
         elif cfg.POOLING_MODE == 'pool':
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
+
+        # fuse roi
+        pooled_feat_concat = torch.cat([pooled_feat4, pooled_feat5], dim=1)
+        pooled_feat = F.relu(self.Conv_pool(pooled_feat_concat), inplace=True)
 
         # feed pooled features to top model
         pooled_feat = self._head_to_tail(pooled_feat)
@@ -130,6 +157,11 @@ class _fasterRCNN(nn.Module):
         normal_init(self.RCNN_rpn.RPN_Conv, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_rpn.RPN_cls_score, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_rpn.RPN_bbox_pred, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.Phase_concat.reduce256, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.Up_concat.reduce256, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.Up_concat.reduce512, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        # normal_init(self.Up_concat.L2Norm, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.Conv_pool, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_cls_score, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
 

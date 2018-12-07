@@ -30,11 +30,13 @@ class _ProposalLayer(nn.Module):
     transformations to a set of regular boxes (called "anchors").
     """
 
-    def __init__(self, feat_stride, scales, ratios):
+    def __init__(self, feat_stride, scales, ratios, base_size):
         super(_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride
+        self.base_size = base_size
         self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
+                                                          base_size=base_size,
                                                           ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
 

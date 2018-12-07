@@ -25,6 +25,7 @@ class _RPN(nn.Module):
         self.anchor_scales = cfg.ANCHOR_SCALES
         self.anchor_ratios = cfg.ANCHOR_RATIOS
         self.feat_stride = cfg.FEAT_STRIDE[0]
+        self.base_size = cfg.BASE_SIZE
 
         # define the conv-relu layers processing input feature map
         self.RPN_Conv = nn.Conv2d(self.din, 512, 3, 1, 1, bias=True)
@@ -38,10 +39,11 @@ class _RPN(nn.Module):
         self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0)
 
         # define proposal layer
-        self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
+        self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios, self.base_size)
 
         # define anchor target layer
-        self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
+        self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios,
+                                                    self.base_size)
 
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0

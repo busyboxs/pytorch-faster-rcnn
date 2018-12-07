@@ -62,6 +62,9 @@ def parse_args():
     parser.add_argument('--load_dir', dest='load_dir',
                         help='directory to load models',
                         default="/srv/share/jyang375/models")
+    parser.add_argument('--save_root', dest='save_root',
+                        help='directory to save txt file',
+                        default="result")
     parser.add_argument('--image_dir', dest='image_dir',
                         help='directory to load images for demo',
                         default="images")
@@ -146,6 +149,17 @@ if __name__ == '__main__':
 
     print('Called with args:')
     print(args)
+
+    if args.dataset == "pascal_voc":
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+    elif args.dataset == "kittivoc":
+        args.set_cfgs = ['ANCHOR_SCALES', '[2, 4, 8, 16, 32]',
+                         'ANCHOR_RATIOS', '[0.5,1,2]',
+                         'MAX_NUM_GT_BOXES', '20',
+                         'FEAT_STRIDE', '[8, ]',
+                         'BASE_SIZE', '8']
+    elif args.dataset == "pascal_voc_0712":
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
 
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
@@ -324,7 +338,7 @@ if __name__ == '__main__':
         misc_tic = time.time()
 
         # save result to txt for kitti validation
-        save_root = '/media/yangshun/0008EB70000B0B9F/roi_roi_new/kitti/txt/pytorch/faster_rcnn/data'
+        save_root = args.save_root
         if not (os.path.exists(save_root)):
             os.makedirs(save_root)
         image_name = img_list[img_index]

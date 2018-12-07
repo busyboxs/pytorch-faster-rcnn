@@ -34,14 +34,17 @@ class _AnchorTargetLayer(nn.Module):
         labels and bounding-box regression targets.
     """
 
-    def __init__(self, feat_stride, scales, ratios):
+    def __init__(self, feat_stride, scales, ratios, base_size):
         super(_AnchorTargetLayer, self).__init__()
 
         self._feat_stride = feat_stride
         self._scales = scales
         anchor_scales = scales
+        self.base_size = base_size
         self._anchors = torch.from_numpy(
-            generate_anchors(scales=np.array(anchor_scales), ratios=np.array(ratios))).float()
+            generate_anchors(scales=np.array(anchor_scales),
+                             base_size=base_size,
+                             ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
 
         # allow boxes to sit over the edge by a small amount

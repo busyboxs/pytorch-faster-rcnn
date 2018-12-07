@@ -60,10 +60,10 @@ __C.TRAIN.SUMMARY_INTERVAL = 180
 
 # Scale to use during training (can list multiple scales)
 # The scale is the pixel size of an image's shortest side
-__C.TRAIN.SCALES = (375,)
+__C.TRAIN.SCALES = (376,)
 
 # Max pixel size of the longest side of a scaled input image
-__C.TRAIN.MAX_SIZE = 1240
+__C.TRAIN.MAX_SIZE = 1248
 
 # Trim size for input images to create minibatch
 __C.TRAIN.TRIM_HEIGHT = 600
@@ -165,10 +165,10 @@ __C.TEST = edict()
 
 # Scale to use during testing (can NOT list multiple scales)
 # The scale is the pixel size of an image's shortest side
-__C.TEST.SCALES = (600,)
+__C.TEST.SCALES = (376,)
 
 # Max pixel size of the longest side of a scaled input image
-__C.TEST.MAX_SIZE = 1000
+__C.TEST.MAX_SIZE = 1248
 
 # Overlap threshold used for non-maximum suppression (suppress boxes with
 # IoU >= this threshold)
@@ -296,6 +296,8 @@ __C.ANCHOR_RATIOS = [0.5, 1, 2]
 
 # Feature stride for RPN
 __C.FEAT_STRIDE = [16, ]
+
+__C.BASE_SIZE = 16
 
 __C.CUDA = False
 
