@@ -246,7 +246,6 @@ if __name__ == '__main__':
 
     # print(fasterRCNN)
 
-
     lr = cfg.TRAIN.LEARNING_RATE
     lr = args.lr
     # tr_momentum = cfg.TRAIN.MOMENTUM

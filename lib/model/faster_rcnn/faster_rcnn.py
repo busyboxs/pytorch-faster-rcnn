@@ -12,7 +12,7 @@ from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
 from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
-from model.fuse.fuse import _Up_concat, _Phase_concat, _L2Norm
+from model.fuse.fuse import _Up_concat, _Phase_concat, _ScaledL2Norm, _Context_Generator
 import time
 import pdb
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
@@ -46,7 +46,10 @@ class _fasterRCNN(nn.Module):
         self.Phase_concat = _Phase_concat(512, 256)
         self.Up_concat = _Up_concat(512, 512, 256)
         # self.L2Norm = _L2Norm(self.reduce_dim, 20)
-        self.Conv_pool = nn.Conv2d(1024, 512, kernel_size=1)
+        self.Conv_pool = nn.Conv2d(2048, 512, kernel_size=1)
+        # self.Scale_l2_norm = _ScaledL2Norm(1024, 20)
+
+        self.Context_generator = _Context_Generator(2, 2, 0.5, 0.5)
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -65,6 +68,7 @@ class _fasterRCNN(nn.Module):
         #
         conv4_f = self.Phase_concat(conv4_2, conv4_3)
         conv5_f = self.Phase_concat(conv5_2, conv5_3)
+
         conv_f = self.Up_concat(conv5_f, conv4_f)
         #
         base_feat = conv_f
@@ -89,9 +93,12 @@ class _fasterRCNN(nn.Module):
             rpn_loss_cls = 0
             rpn_loss_bbox = 0
 
-        rois = Variable(rois)
-        # do roi pooling based on predicted rois
+        rois_context = self.Context_generator(im_info, rois)
 
+        rois = Variable(rois)
+        rois_context = Variable(rois_context)
+
+        # do roi pooling based on predicted rois
         if cfg.POOLING_MODE == 'crop':
             # pdb.set_trace()
             # pooled_feat_anchor = _crop_pool_layer(base_feat, rois.view(-1, 5))
@@ -103,12 +110,15 @@ class _fasterRCNN(nn.Module):
         elif cfg.POOLING_MODE == 'align':
             pooled_feat5 = self.RCNN_roi_align5(conv5_3, rois.view(-1, 5))
             pooled_feat4 = self.RCNN_roi_align4(conv4_3, rois.view(-1, 5))
+            pooled_feat5_c = self.RCNN_roi_align5(conv5_3, rois_context.view(-1, 5))
+            pooled_feat4_c = self.RCNN_roi_align4(conv4_3, rois_context.view(-1, 5))
             pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5))
         elif cfg.POOLING_MODE == 'pool':
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
 
         # fuse roi
-        pooled_feat_concat = torch.cat([pooled_feat4, pooled_feat5], dim=1)
+        pooled_feat_concat = torch.cat([pooled_feat4, pooled_feat5, pooled_feat5_c, pooled_feat4_c], dim=1)
+        # pooled_feat_concat = self.Scale_l2_norm(pooled_feat4, pooled_feat5)
         pooled_feat = F.relu(self.Conv_pool(pooled_feat_concat), inplace=True)
 
         # feed pooled features to top model
